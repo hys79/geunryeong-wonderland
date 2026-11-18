@@ -6,7 +6,7 @@ try{if(document.fonts&&document.fonts.load){document.fonts.load("20px 'GameFont'
 
 /* ---------- 고해상도 캔버스 ---------- */
 function resize(){
-  const dpr=window.devicePixelRatio||1;
+  const dpr=Math.min(window.devicePixelRatio||1,2);   // 모바일 고해상도에서 렌더 부담이 커지지 않게 최대 2배
   const w=Math.min(innerWidth,innerHeight*960/576),h=w*576/960;
   cv.style.width=w+'px';cv.style.height=h+'px';
   cv.width=Math.max(1,Math.round(w*dpr));cv.height=Math.max(1,Math.round(h*dpr));
@@ -53,12 +53,19 @@ addEventListener('keydown',e=>{
   }
 });
 addEventListener('keyup',e=>{if(KEYMAP[e.code])K[KEYMAP[e.code]]=false});
-addEventListener('blur',()=>{for(const k in K)K[k]=false});
+addEventListener('blur',()=>{for(const k in K)K[k]=false;touchReset()});
 
 function toLogical(e){const r=cv.getBoundingClientRect();return{x:(e.clientX-r.left)/r.width*960,y:(e.clientY-r.top)/r.height*576}}
-addEventListener('mousemove',e=>{UI.mouse=toLogical(e);if(UI.drag)applySlider(UI.drag,UI.mouse.x)});
-cv.addEventListener('mousedown',e=>{
-  ensureAudio();
+/* 마우스와 터치를 같은 포인터 이벤트로 처리 */
+addEventListener('pointermove',e=>{
+  const p=UI.mouse=toLogical(e);
+  if(UI.drag)applySlider(UI.drag,p.x);
+  touchMove(e.pointerId,p);
+});
+cv.addEventListener('pointerdown',e=>{
+  if(e.pointerType==='mouse'&&e.button!==0)return;   // 마우스 오른쪽/가운데 버튼은 무시
+  e.preventDefault();ensureAudio();
+  TOUCH.enabled=e.pointerType==='touch';   // 마지막으로 쓴 입력 방식에 맞춰 터치 조작 표시
   const p=UI.mouse=toLogical(e);
   if(UI.settingsOpen)for(const s of UI.sliders){
     if(p.x>=s.x-14&&p.x<=s.x+s.w+14&&Math.abs(p.y-s.y)<=18){UI.drag=s;applySlider(s,p.x);return}
@@ -68,10 +75,17 @@ cv.addEventListener('mousedown',e=>{
     if((UI.settingsOpen||UI.confirm)&&!b.modal)continue;
     if(!b.disabled&&p.x>=b.x&&p.x<=b.x+b.w&&p.y>=b.y&&p.y<=b.y+b.h){sfx.click();b.onClick();return}
   }
+  touchDown(e.pointerId,p);   // 버튼이 아니면: 조이스틱 / 조사 버튼
 });
-addEventListener('mouseup',()=>{if(UI.drag){if(UI.drag.id==='sfx')sfx.coin();UI.drag=null;save()}});
-
-autoIntro();   // 처음 접속했다면 스토리부터
+function pointerEnd(e){
+  if(UI.drag){if(UI.drag.id==='sfx')sfx.coin();UI.drag=null;save()}
+  touchUp(e.pointerId);
+  if(e.pointerType==='touch')UI.mouse={x:-99,y:-99};   // 터치에는 "마우스가 올라간" 상태가 없음
+  ensureAudio();
+}
+addEventListener('pointerup',pointerEnd);
+addEventListener('pointercancel',pointerEnd);
+cv.addEventListener('contextmenu',e=>e.preventDefault());
 
 /* ---------- 메인 루프 ---------- */
 const MENU_STATES=['intro','title','result','shop','ending','gameover','help'];
@@ -89,7 +103,7 @@ function frame(now){
   else if(G.state==='help'){G.time+=dt;drawHelp()}
   else if(G.state==='shop'){G.time+=dt;drawShop()}
   else{if(!UI.settingsOpen)updateState(dt);drawPlay()}
-  drawSettingsButton();drawSettingsPanel();drawConfirm();
+  drawTouch();drawSettingsButton();drawSettingsPanel();drawConfirm();
   if(DBG.enabled)drawDebug();
   cv.style.cursor=UI.hover?'pointer':'default';
   requestAnimationFrame(frame);

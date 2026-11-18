@@ -28,19 +28,23 @@ function genMap(stage,themeIdx){
   const ex=clamp(Math.round(sx+Math.cos(ang)*D),7,W-8), ey=clamp(Math.round(sy+Math.sin(ang)*D),7,H-8);
   const pR=S.rock,pM=pR+S.mush,pF=pM+S.flower,pT=pF+S.tree;
   const lakeN=noiseGrid(W,H,9,s1),forestN=noiseGrid(W,H,6,s2),mudN=noiseGrid(W,H,7,s3);
-  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
-    let t=T.GRASS;const r=rng();
-    const i=y*W+x,lake=lakeN[i],forest=forestN[i],mudn=mudN[i];
-    if(x<3||y<3||x>=W-3||y>=H-3)t=T.TREE;
-    else if(lake>S.lake-TERRAIN_RAMP.lake*prog)t=T.WATER;
-    else if(forest>S.forest-TERRAIN_RAMP.forest*prog&&r<0.8)t=T.TREE;
-    else if(mudn>S.mud-TERRAIN_RAMP.mud*prog)t=T.MUD;
-    else if(r<pR)t=T.ROCK;
-    else if(r<pM)t=T.MUSH;
-    else if(r<pF)t=T.FLOWER;
-    else if(r<pT)t=T.TREE;
-    tiles[y*W+x]=t;
+  const lakeT=S.lake-TERRAIN_RAMP.lake*prog,forestT=S.forest-TERRAIN_RAMP.forest*prog,mudT=S.mud-TERRAIN_RAMP.mud*prog;   // 칸마다 다시 계산하지 않도록 미리
+  const WATER=T.WATER,TREE=T.TREE,MUD=T.MUD,ROCK=T.ROCK,MUSH=T.MUSH,FLOWER=T.FLOWER;
+  for(let y=3;y<H-3;y++){
+    for(let x=3,i=y*W+3;x<W-3;x++,i++){
+      const r=rng();let t=T.GRASS;
+      if(lakeN[i]>lakeT)t=WATER;
+      else if(forestN[i]>forestT&&r<0.8)t=TREE;
+      else if(mudN[i]>mudT)t=MUD;
+      else if(r<pR)t=ROCK;
+      else if(r<pM)t=MUSH;
+      else if(r<pF)t=FLOWER;
+      else if(r<pT)t=TREE;
+      tiles[i]=t;
+    }
   }
+  for(let x=0;x<W;x++)for(let k=0;k<3;k++){tiles[k*W+x]=TREE;tiles[(H-1-k)*W+x]=TREE}   // 맵 가장자리는 나무 벽
+  for(let y=0;y<H;y++)for(let k=0;k<3;k++){tiles[y*W+k]=TREE;tiles[y*W+W-1-k]=TREE}
   const clear=(cx,cy,rad)=>{for(let dy=-rad;dy<=rad;dy++)for(let dx=-rad;dx<=rad;dx++){
     const x=cx+dx,y=cy+dy;if(x>=3&&y>=3&&x<W-3&&y<H-3)tiles[y*W+x]=T.GRASS}};
   clear(sx,sy,3);clear(ex,ey,2);
@@ -71,7 +75,6 @@ function genMap(stage,themeIdx){
     }
     return null;
   };
-  const nearPath=(rmin,rmax)=>{const pt=pathPt(0.03+rng()*0.94);return nearFree(pt[0],pt[1],rmin,rmax)};
 
   /* ---------- 꿈조각 · 구덩이: 칸마다 "스폰 확률"로 정하고, 같은 종류끼리 "최소 간격"을 지킴 ----------
      총 개수는 따로 정하지 않음 → 걸어갈 수 있는 영역이 넓을수록(탈출이 어려울수록) 자연스럽게 늘어남 */
@@ -83,20 +86,37 @@ function genMap(stage,themeIdx){
     if((x-sx)*(x-sx)+(y-sy)*(y-sy)<=R*R&&free(x,y)&&Math.hypot(x-ex,y-ey)>4)elig.push(y*W+x);
   }
   for(let i=elig.length-1;i>0;i--){const j=(rng()*(i+1))|0,t=elig[i];elig[i]=elig[j];elig[j]=t}   // 순서를 섞어서 한쪽으로 쏠리지 않게
-  const farther=(list,x,y,minD)=>{const m=minD*TS,cx=x*TS+8,cy=y*TS+8;return !list.some(o=>Math.abs(o.x-cx)<m&&Math.abs(o.y-cy)<m&&Math.hypot(o.x-cx,o.y-cy)<m)};
+  /* 최소 간격 검사용 격자 해시: 후보마다 전체를 훑지 않고 주변 칸만 확인 */
+  const spacer=minD=>{
+    const grid=new Map(),m2=minD*minD,key=(cx,cy)=>cx*1024+cy;
+    return {
+      ok(x,y){const cx=Math.floor(x/minD),cy=Math.floor(y/minD);
+        for(let a=-1;a<=1;a++)for(let b=-1;b<=1;b++){const l=grid.get(key(cx+a,cy+b));
+          if(l)for(let k=0;k<l.length;k+=2){const dx=l[k]-x,dy=l[k+1]-y;if(dx*dx+dy*dy<m2)return false}}
+        return true},
+      add(x,y){const k=key(Math.floor(x/minD),Math.floor(y/minD));let l=grid.get(k);if(!l)grid.set(k,l=[]);l.push(x,y)},
+    };
+  };
+  /* 칸마다 확률 p로 굴리는 것과 같은 결과를, 난수를 몇 번만 써서 얻음 (다음 성공 칸까지 건너뛰기) */
+  const rolls=(list,p,fn)=>{
+    if(p<=0)return;const lq=Math.log(1-p);
+    for(let i=Math.floor(Math.log(1-rng())/lq);i<list.length;i+=1+Math.floor(Math.log(1-rng())/lq))fn(list[i]%W,(list[i]/W)|0);
+  };
+  const coinSp=spacer(CFG.COIN_MIN_DIST),coinNear=spacer(2),pitSp=spacer(CFG.PIT_MIN_DIST);
+  const addCoin=(x,y)=>{put(x,y,'coin',1);coinSp.add(x,y);coinNear.add(x,y)};
   // 길 위 꿈조각: 길 한 칸마다 확률로 (걷기만 해도 꾸준히 모임)
-  for(const [x,y] of path)if(rng()<CFG.COIN_PATH_PROB&&free(x,y)&&farther(items,x,y,CFG.COIN_MIN_DIST))put(x,y,'coin',1);
-  for(const i of elig){
-    const x=i%W,y=(i-x)/W;
-    if(rng()<CFG.COIN_PROB&&farther(items,x,y,CFG.COIN_MIN_DIST))put(x,y,'coin',1);
-    else if(rng()<CFG.PIT_PROB&&farther(pits,x,y,CFG.PIT_MIN_DIST))pits.push({x:x*TS+8,y:y*TS+8,pit:true,used:false});
-  }
+  for(const [x,y] of path)if(rng()<CFG.COIN_PATH_PROB&&free(x,y)&&coinSp.ok(x,y))addCoin(x,y);
+  rolls(elig,CFG.COIN_PROB,(x,y)=>{if(coinSp.ok(x,y))addCoin(x,y)});
+  rolls(elig,CFG.PIT_PROB,(x,y)=>{   // 구덩이는 꿈조각과 바로 겹치지 않게
+    if(pitSp.ok(x,y)&&coinNear.ok(x,y)){pits.push({x:x*TS+8,y:y*TS+8,pit:true,used:false});pitSp.add(x,y)}
+  });
 
   /* ---------- 단서: 발자국만. 베리가 조사하면 출구가 이어진 방향을 말풍선으로 알려 줌 ---------- */
   const DIR8=['동','남동','남','남서','서','북서','북','북동'];
   const dir8=(dx,dy)=>DIR8[((Math.round(Math.atan2(dy,dx)/(Math.PI/4))%8)+8)%8];
   const clues=[];
-  const addClue=(x,y)=>clues.push({x:x*TS+8,y:y*TS+8,clue:true,found:false,dirName:dir8(ex-x,ey-y)});
+  const clueSp=spacer(CFG.CLUE_MIN_DIST);
+  const addClue=(x,y)=>{clueSp.add(x,y);clues.push({x:x*TS+8,y:y*TS+8,clue:true,found:false,dirName:dir8(ex-x,ey-y)})};
   // 스폰 지점 주변에는 단서를 두지 않음 (직접 찾아다니는 재미): 시작점에서 CLUE_MIN_START칸 이상 떨어진 곳에만
   const clueFree=(cx,cy,rmin,rmax)=>{for(let k=0;k<20;k++){const p=nearFree(cx,cy,rmin,rmax);if(p&&Math.hypot(p[0]-sx,p[1]-sy)>=CLUE_MIN_START)return p}return null};
   // 스폰 근처, 출구 방향으로 발자국 하나: 자연스럽게 출구 쪽으로 유도
@@ -108,11 +128,10 @@ function genMap(stage,themeIdx){
   {
     const P=[];for(let i=0;i<L;i+=3)P.push(path[i]);P.push(path[L-1]);
     const pathDist=(x,y)=>{let m=1e9;for(const q of P){const d=(q[0]-x)*(q[0]-x)+(q[1]-y)*(q[1]-y);if(d<m)m=d}return Math.sqrt(m)};
-    for(const i of elig){
-      if(rng()>=CFG.FAR_CLUE_PROB)continue;   // 최대 확률로 먼저 걸러낸 뒤, 거리에 따른 비율을 적용
-      const x=i%W,y=(i-x)/W,d=pathDist(x,y);if(d<CFG.FAR_START)continue;
-      if(rng()<clamp((d-CFG.FAR_START)/(CFG.FAR_FULL-CFG.FAR_START),0,1)&&farther(clues,x,y,CFG.CLUE_MIN_DIST))addClue(x,y);
-    }
+    rolls(elig,CFG.FAR_CLUE_PROB,(x,y)=>{   // 최대 확률로 먼저 걸러낸 뒤, 길에서 멀수록 더 잘 남도록 거리 비율을 적용
+      const d=pathDist(x,y);if(d<CFG.FAR_START)return;
+      if(rng()<clamp((d-CFG.FAR_START)/(CFG.FAR_FULL-CFG.FAR_START),0,1)&&clueSp.ok(x,y))addClue(x,y);
+    });
   }
   return {W,H,seed,theme:themeIdx,stage,tiles,sx,sy,ex,ey,items,pits,clues,pathLen:L,dist:D,elig:elig.length};
 }

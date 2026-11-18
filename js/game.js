@@ -173,6 +173,7 @@ function updatePlay(dt){
     }
   }else{
     let ix=(K.right?1:0)-(K.left?1:0),iy=(K.down?1:0)-(K.up?1:0);
+    if(TOUCH.joy.active){ix=TOUCH.joy.x;iy=TOUCH.joy.y}   // 모바일 가상 조이스틱
     if(ix||iy){
       const l=Math.hypot(ix,iy);ix/=l;iy/=l;
       const mud=tileAt(b.x,b.y-1)===T.MUD,sp=CFG.BERRY_SPEED*(DBG.enabled?DBG.berryMul:1)*(mud?0.8:1),ox=b.x,oy=b.y;
