@@ -25,7 +25,7 @@ addEventListener('keydown',e=>{
     if(UI.confirm)UI.confirm=null;
     else if(UI.settingsOpen)closeSettings();
     else if(G.state==='shop')G.state=G.shopFrom;
-    else if(G.state==='help')G.state=G.helpFrom;
+    else if(G.state==='help')closeHelp();
     else UI.settingsOpen=true;
     return;
   }
@@ -47,9 +47,9 @@ addEventListener('keydown',e=>{
     if(m)shopKey(+m[1]-1);
     if(e.code==='Backspace')G.state=G.shopFrom;
   }else if(G.state==='help'){
-    if(e.code==='ArrowLeft'||e.code==='KeyA')G.helpPage=Math.max(0,G.helpPage-1);
-    else if(e.code==='ArrowRight'||e.code==='KeyD')G.helpPage=Math.min(HELP.length-1,G.helpPage+1);
-    else if(go)G.state=G.helpFrom;
+    if(e.code==='ArrowLeft'||e.code==='KeyA')helpPage(-1);
+    else if(e.code==='ArrowRight'||e.code==='KeyD')helpPage(1);
+    else if(go)closeHelp();
   }
 });
 addEventListener('keyup',e=>{if(KEYMAP[e.code])K[KEYMAP[e.code]]=false});

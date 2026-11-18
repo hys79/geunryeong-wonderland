@@ -19,7 +19,10 @@ const floatText=(x,y,text,col)=>G.floats.push({x,y,text,col,t:1.1});
 const itemFloat=(x,y,icon,name)=>G.floats.push({x,y,text:name,icon,t:1.6});   // 아이템 이름 + 아이콘만 (효과는 표시하지 않음)
 const tileAt=(x,y)=>G.map.tiles[tileIdx(x,y)];
 function openShop(from){G.shopFrom=from;G.state='shop';G.shopMsg='꿈조각으로 근령이와 베리를 강화하자!'}
-function openHelp(from){G.helpFrom=from;G.helpPage=0;G.state='help'}
+function openHelp(from){G.helpFrom=from;G.helpPage=0;G.helpFirst=false;G.state='help'}
+/* 게임 설명 닫기: 처음 플레이라면 설명을 본 뒤 바로 게임 시작 */
+function closeHelp(){if(G.helpFirst){G.helpFirst=false;startAttempt()}else G.state=G.helpFrom}
+function helpPage(d){const n=HELP.length;G.helpPage=((G.helpPage+d)%n+n)%n}   // 끝에서 계속 누르면 반대쪽 끝으로 돌아감
 
 /* 한 번의 시도(탈출 도전) 시작: 매번 새로운 테마·구조의 맵, 거리는 탈출 횟수 기준 */
 /* 처음 시작할 때만 오프닝 스토리를 보여줌 */

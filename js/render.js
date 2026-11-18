@@ -229,7 +229,10 @@ const STORY=[
 function storyDone(){const L=STORY[G.storyPage];return G.storyT*16>=L.join('').length+4}
 function openEnding(){G.ending={replay:true,idx:G.endings.length-1};G.time=0;G.endSkip=false;G.state='ending'}   // 스토리 보기에서 엔딩 다시 보기 (회차 선택 가능)
 function pickEnding(i){if(G.ending&&G.ending.replay){const n=G.endings.length;if(n>0)G.ending.idx=((i%n)+n)%n}}   // 끝에서 계속 누르면 반대쪽 끝으로 돌아감
-function storyEnd(){if(G.storyReplay)G.state='title';else startAttempt()}
+function storyEnd(){
+  if(G.storyReplay)G.state='title';
+  else{G.helpFrom='title';G.helpPage=0;G.helpFirst=true;G.state='help'}   // 처음 플레이: 스토리 다음에 게임 설명을 보고 시작
+}
 function storyNext(){
   if(!storyDone()){G.storySkip=true;return}
   if(G.storyPage<STORY.length-1){G.storyPage++;G.storyT=0;G.storySkip=false}else storyEnd();
@@ -300,9 +303,9 @@ function drawHelp(){
   pg.lines.forEach((l,i)=>txt(l,170,148+i*30,16,l.startsWith('  ')?C.sub:C.ink,'left','','normal'));
   txt(`${G.helpPage+1} / ${HELP.length}`,480,462,14,C.sub,'center','','normal');
   const last=G.helpPage>=HELP.length-1;
-  button(170,478,110,38,'이전',()=>{G.helpPage=Math.max(0,G.helpPage-1)},{style:'soft',size:15,disabled:G.helpPage===0});
-  button(425,478,110,38,'닫기',()=>{G.state=G.helpFrom},{style:'primary',size:15});
-  button(680,478,110,38,'다음',()=>{G.helpPage=Math.min(HELP.length-1,G.helpPage+1)},{style:last?'soft':'card',size:15,disabled:last});
+  button(170,478,110,38,'이전',()=>helpPage(-1),{style:'card',size:15});
+  button(G.helpFirst?400:425,478,G.helpFirst?160:110,38,G.helpFirst?'게임 시작':'닫기',closeHelp,{style:'primary',size:15});
+  button(680,478,110,38,'다음',()=>helpPage(1),{style:'card',size:15});
 }
 
 /* ---------- 시도 결과 화면 ---------- */
